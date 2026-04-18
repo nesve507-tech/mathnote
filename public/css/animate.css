@@ -1,0 +1,276 @@
+
+.animation-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: var(--bg-primary);
+    z-index: 2000;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    animation: fadeIn 0.3s ease;
+}
+
+.animation-header {
+    padding: var(--space-md) var(--space-xl);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid var(--border-color);
+    background: rgba(10, 10, 26, 0.9);
+}
+
+.animation-title {
+    font-size: 18px;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.animation-content {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: var(--space-2xl);
+    position: relative;
+}
+
+.animation-stage {
+    font-size: 32px;
+    color: var(--text-primary);
+    margin-bottom: var(--space-2xl);
+    min-height: 100px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.animation-instruction {
+    font-size: 20px;
+    color: var(--text-secondary);
+    margin-bottom: var(--space-xl);
+    height: 30px;
+    opacity: 0;
+    transform: translateY(10px);
+    transition: all 0.5s ease;
+}
+
+.animation-instruction.visible {
+    opacity: 1;
+    transform: translateY(0);
+}
+
+
+.anim-chat-container {
+    position: absolute;
+    bottom: 20px;
+    right: 20px;
+}
+
+.anim-chat-btn {
+    width: 50px;
+    height: 50px;
+    border-radius: 50%;
+    background: var(--accent-gradient);
+    border: none;
+    color: white;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: transform 0.2s;
+}
+
+.anim-chat-btn:hover {
+    transform: scale(1.1);
+}
+
+.anim-chat-bubble {
+    position: absolute;
+    bottom: 70px;
+    right: 0;
+    width: 300px;
+    height: 400px;
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+    overflow: hidden;
+    animation: popIn 0.3s ease;
+}
+
+.anim-chat-messages {
+    flex: 1;
+    overflow-y: auto;
+    padding: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.chat-msg {
+    padding: 8px 12px;
+    border-radius: 8px;
+    font-size: 14px;
+    max-width: 85%;
+    line-height: 1.4;
+}
+
+.chat-msg.user {
+    align-self: flex-end;
+    background: var(--accent-secondary);
+    color: white;
+}
+
+.chat-msg.assistant {
+    align-self: flex-start;
+    background: rgba(255, 255, 255, 0.1);
+    color: var(--text-primary);
+}
+
+.anim-chat-input-area {
+    padding: 8px;
+    border-top: 1px solid var(--border-color);
+    display: flex;
+    gap: 8px;
+}
+
+.anim-chat-input-area input {
+    flex: 1;
+    background: transparent;
+    border: 1px solid var(--border-color);
+    border-radius: 20px;
+    padding: 8px 12px;
+    color: var(--text-primary);
+}
+
+.anim-chat-input-area button {
+    background: transparent;
+    border: none;
+    color: var(--accent-primary);
+    font-weight: bold;
+    cursor: pointer;
+}
+
+.animation-controls {
+    display: flex;
+    gap: var(--space-lg);
+    align-items: center;
+    justify-content: center;
+    padding-bottom: var(--space-2xl);
+}
+
+.control-btn {
+    width: 50px;
+    height: 50px;
+    border-radius: 50%;
+    border: 1px solid var(--border-color);
+    background: var(--bg-card);
+    color: var(--text-primary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.control-btn:hover {
+    background: var(--accent-gradient);
+    border-color: transparent;
+    transform: scale(1.1);
+}
+
+.control-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    transform: none;
+    background: var(--bg-card);
+}
+
+.progress-bar {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    height: 4px;
+    background: var(--accent-gradient);
+    transition: width 0.3s ease;
+}
+
+
+.anim-el {
+    display: inline-block;
+    transition: all 0.5s ease;
+}
+
+.slide-in-right {
+    animation: slideInRight 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.slide-out-left {
+    animation: slideOutLeft 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.fade-in {
+    animation: fadeIn 0.5s ease forwards;
+}
+
+.fade-out {
+    animation: fadeOut 0.5s ease forwards;
+}
+
+.highlight-op {
+    color: var(--accent-secondary);
+    font-weight: bold;
+}
+
+@keyframes slideInRight {
+    from {
+        opacity: 0;
+        transform: translateX(50px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateX(0);
+    }
+}
+
+@keyframes slideOutLeft {
+    from {
+        opacity: 1;
+        transform: translateX(0);
+    }
+
+    to {
+        opacity: 0;
+        transform: translateX(-50px);
+    }
+}
+
+@keyframes popIn {
+    from {
+        opacity: 0;
+        transform: scale(0.5);
+    }
+
+    to {
+        opacity: 1;
+        transform: scale(1);
+    }
+}
+
+
+.operation-float {
+    position: absolute;
+    font-size: 24px;
+    color: var(--accent-primary);
+    font-weight: bold;
+    pointer-events: none;
+    z-index: 10;
+}
