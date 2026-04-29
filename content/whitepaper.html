@@ -1,0 +1,272 @@
+<h1>Mathnote Whitepaper</h1>
+<p><a href="/mathnote">Main Mathnote</a> | <a href="#problem-statement">Problem Statement</a> | <a href="#solution-overview">Solution Overview</a> | <a href="#architecture">Architecture</a> | <a href="#ocr-pipeline">OCR Pipeline</a> | <a href="#api-surface">API Surface</a> | <a href="#security-and-operations">Security And Operations</a> | <a href="#roadmap">Roadmap</a></p>
+<h2>Executive Summary</h2>
+<p>Mathnote is a lightweight mathematics workspace that combines three capabilities in a single web application:</p>
+<ol>
+<li>AI-assisted, step-by-step problem solving.</li>
+<li>Interactive graph analysis for equations and point-fitted curves.</li>
+<li>OCR-assisted problem capture from worksheets, screenshots, and handwritten notes.</li>
+</ol>
+<p>The original repository already supported solver, explanation, verification, graph analysis, saved notes, and animation playback. This implementation extends the platform with an OCR subsystem based on <code>tesseract.js</code>, rewires the frontend so image-to-solver is a first-class workflow, and adds documentation endpoints so product and engineering stakeholders can review the architecture directly from the running app.</p>
+<p>The design goal is pragmatic: reduce the friction between &quot;I have a math problem in an image&quot; and &quot;I have a verified, explainable solution.&quot; The OCR capability is therefore not a side utility. It is integrated into the primary solving pipeline and shares the same backend reasoning path used by manual text entry.</p>
+<h2>Problem Statement</h2>
+<p>Modern students and self-learners often start from non-editable inputs:</p>
+<ol>
+<li>Phone photos of notebook pages.</li>
+<li>Screenshots from online homework systems.</li>
+<li>Scanned worksheets or classroom handouts.</li>
+<li>Mixed symbolic and natural-language questions.</li>
+</ol>
+<p>Traditional calculator-style interfaces assume the user can retype the full problem. That assumption is frequently false. For many real workflows, the transcription step is the most error-prone and highest-friction part of the experience.</p>
+<p>The repository prior to this implementation solved typed problems well, but it lacked a bridge from image content into the existing solve and verify path. This produced three gaps:</p>
+<ol>
+<li>No native OCR ingestion.</li>
+<li>No backend API for image extraction.</li>
+<li>No product surface that connected captured text to the solver without manual re-entry.</li>
+</ol>
+<h2>Solution Overview</h2>
+<p>The updated system introduces an OCR capture workflow with four properties:</p>
+<ol>
+<li><strong>Backend OCR extraction</strong> using <code>tesseract.js</code> and <code>multer</code> memory uploads.</li>
+<li><strong>Integrated solve reuse</strong> through a shared backend solve function rather than a second, separate AI path.</li>
+<li><strong>Frontend OCR review controls</strong> so users can inspect extracted text before solving or inject it into either the math solver tab or the word-problem tab.</li>
+<li><strong>Bundled language data</strong> so OCR does not depend on a runtime download for the supported languages in this project.</li>
+<li><strong>Operational documentation</strong> via a whitepaper route and a repository-level change log.</li>
+</ol>
+<p>The result is a tighter workflow:</p>
+<ol>
+<li>User uploads an image.</li>
+<li>Backend extracts text through OCR.</li>
+<li>User either reviews and edits extracted text or invokes &quot;Extract and Solve.&quot;</li>
+<li>The existing solver pipeline generates structured steps, summary, and final answer.</li>
+<li>Verification, explanation, animation, and save features continue to work on the OCR-derived solution.</li>
+</ol>
+<h2>Product Objectives</h2>
+<p>The implementation is aligned around six product objectives:</p>
+<ol>
+<li>Preserve the existing <code>/mathnote</code> experience.</li>
+<li>Add OCR without breaking the current solve, verify, animate, or graph paths.</li>
+<li>Keep the backend small and dependency-light.</li>
+<li>Keep startup reliable even when the Groq API key is not configured.</li>
+<li>Make the OCR workflow visible and understandable to non-technical users.</li>
+<li>Document the resulting architecture in a form suitable for engineering review.</li>
+</ol>
+<h2>Architecture</h2>
+<h3>System Shape</h3>
+<p>The application remains a monolithic Express server serving a static frontend:</p>
+<ol>
+<li><code>server.js</code> serves static assets under <code>/mathnote</code>.</li>
+<li>Browser JavaScript drives UI state, graphing, OCR interaction, and solution rendering.</li>
+<li>Groq-backed AI endpoints perform solve, verify, explain, animation annotation, and graph analysis.</li>
+<li><code>tesseract.js</code> performs OCR on uploaded image buffers.</li>
+</ol>
+<p>This architecture is intentionally conservative. The repository is small, and the added OCR feature does not justify a full backend split or a new service boundary.</p>
+<h3>Reusable Solve Core</h3>
+<p>The most important backend change is not the OCR route by itself. It is the introduction of a shared solve function:</p>
+<ol>
+<li>Manual solver requests call the shared solve path.</li>
+<li>OCR auto-solve requests call the same shared solve path.</li>
+<li>Graph analysis reuses the same solver prompt format for consistency.</li>
+</ol>
+<p>This reduces drift across entry points and ensures the OCR path inherits the same output schema:</p>
+<ol>
+<li><code>steps</code></li>
+<li><code>finalAnswer</code></li>
+<li><code>summary</code></li>
+</ol>
+<h3>Documentation Surface</h3>
+<p>The server exposes documentation routes:</p>
+<ol>
+<li><code>/mathnote/whitepaper</code></li>
+<li><code>/mathnote/changed-readme</code></li>
+</ol>
+<p>These routes allow engineering stakeholders to review implementation details directly from the deployed application without requiring repository access.</p>
+<h2>OCR Pipeline</h2>
+<h3>Upload Handling</h3>
+<p>The OCR flow uses <code>multer</code> with in-memory storage:</p>
+<ol>
+<li>The frontend posts an image via <code>FormData</code>.</li>
+<li>The backend validates the file as an image.</li>
+<li>The backend enforces an 8 MB file limit.</li>
+<li>The image is passed to <code>tesseract.js</code> for recognition.</li>
+</ol>
+<p>In-memory storage is appropriate here because the images are transient request payloads rather than durable assets. This avoids persistence complexity and reduces local disk clutter.</p>
+<h3>Recognition</h3>
+<p>Recognition is performed using <code>tesseract.js</code>, with language selection tied to the UI language:</p>
+<ol>
+<li>English mode uses local <code>eng</code> trained data.</li>
+<li>Vietnamese mode uses local <code>vie</code> trained data.</li>
+</ol>
+<p>The OCR subsystem normalizes common text artifacts after extraction:</p>
+<ol>
+<li>Smart quotes are normalized.</li>
+<li>Long dashes are normalized to hyphens.</li>
+<li>Multiplication and division glyphs are normalized into more solver-friendly symbols.</li>
+<li>Repeated whitespace and empty lines are collapsed.</li>
+</ol>
+<p>This normalization is intentionally light. The goal is to improve solver ingestion without over-mutating the original problem statement.</p>
+<h3>OCR Interaction Modes</h3>
+<p>The OCR endpoint supports two modes:</p>
+<ol>
+<li><strong>Extract only</strong></li>
+<li><strong>Extract and solve</strong></li>
+</ol>
+<p>This distinction matters because OCR is probabilistic. A review-first mode is useful when the problem is dense or handwriting quality is low, while the one-click solve path is better for clean screenshots and typed worksheets.</p>
+<h3>Frontend UX</h3>
+<p>The updated frontend adds:</p>
+<ol>
+<li>Image selection.</li>
+<li>Live preview.</li>
+<li>OCR status messaging.</li>
+<li>Confidence metadata display.</li>
+<li>Extracted text textarea for correction or reuse.</li>
+<li>Direct insertion into the active solve surface.</li>
+<li>One-click OCR-to-solver execution.</li>
+</ol>
+<p>This is the correct UX boundary. OCR systems should not silently overwrite user input. They should produce editable output and a clear next action.</p>
+<h2>API Surface</h2>
+<h3><code>POST /mathnote/api/solve</code></h3>
+<p>Purpose:</p>
+<ol>
+<li>Solve a typed or programmatically supplied problem through the main AI path.</li>
+</ol>
+<p>Inputs:</p>
+<ol>
+<li><code>problem</code></li>
+<li><code>classLevel</code></li>
+<li><code>lang</code></li>
+<li><code>history</code></li>
+</ol>
+<p>Outputs:</p>
+<ol>
+<li><code>solution</code></li>
+<li><code>rawResponse</code></li>
+</ol>
+<h3><code>POST /mathnote/api/ocr</code></h3>
+<p>Purpose:</p>
+<ol>
+<li>Extract text from an uploaded image.</li>
+<li>Optionally pass that text directly into the shared solver flow.</li>
+</ol>
+<p>Inputs:</p>
+<ol>
+<li>Multipart <code>image</code></li>
+<li><code>lang</code></li>
+<li><code>classLevel</code></li>
+<li><code>history</code></li>
+<li><code>autoSolve</code></li>
+</ol>
+<p>Outputs:</p>
+<ol>
+<li><code>ocr.text</code></li>
+<li><code>ocr.confidence</code></li>
+<li><code>ocr.lines</code></li>
+<li><code>ocr.language</code></li>
+<li>Optional <code>solution</code></li>
+<li>Optional <code>rawResponse</code></li>
+</ol>
+<h3><code>POST /mathnote/api/verify</code></h3>
+<p>Purpose:</p>
+<ol>
+<li>Evaluate the quality and correctness of a generated solution.</li>
+</ol>
+<h3><code>POST /mathnote/api/explain</code></h3>
+<p>Purpose:</p>
+<ol>
+<li>Expand a single step for students who need a simpler explanation.</li>
+</ol>
+<h3><code>POST /mathnote/api/animate</code></h3>
+<p>Purpose:</p>
+<ol>
+<li>Generate animation metadata per step without altering the mathematical source content.</li>
+</ol>
+<h3><code>POST /mathnote/api/graph-solve</code></h3>
+<p>Purpose:</p>
+<ol>
+<li>Route equation or point-based graph questions through the same structured reasoning pipeline.</li>
+</ol>
+<h2>Frontend Design Decisions</h2>
+<h3>Navigation</h3>
+<p>The header now includes explicit navigation to:</p>
+<ol>
+<li>The main Mathnote app.</li>
+<li>The whitepaper.</li>
+<li>The implementation change log.</li>
+</ol>
+<p>This is useful for demos, reviews, and QA handoff because it makes product, implementation, and documentation discoverable in one place.</p>
+<h3>Visual Direction</h3>
+<p>The interface uses a distinct visual language rather than a generic utility-panel layout:</p>
+<ol>
+<li>Space Grotesk for product identity.</li>
+<li>A blue-green-gold atmospheric palette.</li>
+<li>Layered card depth with restrained glass effects.</li>
+<li>OCR controls placed ahead of solver entry to reflect the new product priority.</li>
+</ol>
+<h3>State Handling</h3>
+<p>The updated client controller tracks shared solve state:</p>
+<ol>
+<li>Current problem text.</li>
+<li>Current display problem.</li>
+<li>Current class level.</li>
+<li>Current solution.</li>
+<li>Current source type.</li>
+</ol>
+<p>This fixes a pre-existing product weakness where some secondary features assumed every solve came from the math input only.</p>
+<h2>Security And Operations</h2>
+<h3>Runtime Safety</h3>
+<p>The backend now avoids failing at startup if the Groq key is absent. Instead:</p>
+<ol>
+<li>The server boots normally.</li>
+<li>OCR can still execute.</li>
+<li>AI-backed routes return a clear configuration error until <code>GROQ_API</code> is provided.</li>
+</ol>
+<p>This is an operational improvement because deployment, front-end QA, and static route validation no longer depend on the presence of production credentials.</p>
+<h3>Upload Safety</h3>
+<p>Upload safety controls include:</p>
+<ol>
+<li>Image-only file acceptance.</li>
+<li>An explicit size limit.</li>
+<li>No persistent storage of uploaded images.</li>
+</ol>
+<p>These are not enterprise-grade controls on their own, but they are the correct baseline for the current repository shape.</p>
+<h3>Rate Limiting</h3>
+<p>The pre-existing global solve limiter is preserved for AI solve paths. That remains useful because OCR auto-solve still consumes the same expensive model-backed reasoning path.</p>
+<h2>Reliability Considerations</h2>
+<h3>OCR Accuracy Limits</h3>
+<p>OCR for mathematics has inherent limitations:</p>
+<ol>
+<li>Handwritten notation is harder than typed notation.</li>
+<li>Dense expressions with stacked fractions are harder than linear text.</li>
+<li>Ambiguous symbols such as <code>x</code>, <code>*</code>, <code>×</code>, and <code>+</code> can be misread.</li>
+</ol>
+<p>The UI therefore retains an editable OCR text area instead of treating OCR output as immutable truth.</p>
+<h3>Dependency Model</h3>
+<p>The new dependency footprint remains small:</p>
+<ol>
+<li>Existing Express, Groq, CORS, and Multer dependencies remain.</li>
+<li><code>multer</code> is moved to the current major line.</li>
+<li><code>tesseract.js</code> is added for OCR.</li>
+<li>Local trained data packages are added for English and Vietnamese OCR.</li>
+</ol>
+<p>No database, queue, cache, or storage system was introduced. That is appropriate for the current deployment profile.</p>
+<h2>Expected Deployment Flow</h2>
+<ol>
+<li>Copy <code>.env.example</code> to <code>.env</code>.</li>
+<li>Set <code>GROQ_API</code>.</li>
+<li>Run <code>npm install</code>.</li>
+<li>Run <code>npm start</code>.</li>
+<li>Visit <code>/mathnote</code>.</li>
+</ol>
+<p>The whitepaper and change log can be reviewed through the same server process.</p>
+<h2>Roadmap</h2>
+<p>The next sensible improvements are:</p>
+<ol>
+<li>Local caching of OCR language assets for more predictable cold-start behavior.</li>
+<li>Handwriting-focused OCR preprocessing such as grayscale normalization and contrast boosting.</li>
+<li>Problem-type detection to route OCR output into symbolic or word-problem experiences automatically.</li>
+<li>Better saved-solution metadata, including OCR confidence and solve provenance.</li>
+<li>Test coverage for OCR route behavior and client-side OCR state transitions.</li>
+</ol>
+<h2>Conclusion</h2>
+<p>This implementation upgrades Mathnote from a text-entry solver into a broader math intake workspace. The key value is not merely that OCR exists, but that OCR is productized: it is integrated with the existing solver, exposed in the interface, documented for review, and implemented with small-system discipline.</p>
+<p>The result is a more credible end-to-end learning tool for real classroom and self-study workflows.</p>

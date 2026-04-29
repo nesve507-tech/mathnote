@@ -1,4 +1,4 @@
-
+﻿
 const GraphModule = (() => {
     let calculator = null;
     let points = [];
@@ -365,3 +365,4 @@ const GraphModule = (() => {
         updatePointsList
     };
 })();
+

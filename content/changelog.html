@@ -1,0 +1,104 @@
+<h1>Changed Files</h1>
+<p><a href="/mathnote">Main Mathnote</a> | <a href="/mathnote/whitepaper">Whitepaper</a></p>
+<p>This file explains what was changed to implement the OCR feature set, the documentation additions, and the runtime hardening requested for the project.</p>
+<h2>Core Application Files</h2>
+<h3><code>server.js</code></h3>
+<p>Changed to:</p>
+<ol>
+<li>Add a reusable <code>solveMathProblem()</code> backend path so manual solve and OCR auto-solve share the same logic.</li>
+<li>Add <code>POST /mathnote/api/ocr</code> for image upload, OCR extraction, and optional direct solving.</li>
+<li>Add markdown routes for <code>/mathnote/whitepaper</code> and <code>/mathnote/changed-readme</code>.</li>
+<li>Add startup-safe Groq configuration so the server can run even when <code>GROQ_API</code> is missing.</li>
+<li>Preserve and reuse the existing solve, animate, explain, verify, and graph APIs.</li>
+</ol>
+<h3><code>package.json</code></h3>
+<p>Changed to:</p>
+<ol>
+<li>Add the <code>tesseract.js</code> dependency required for OCR.</li>
+<li>Add local English and Vietnamese Tesseract language-data packages so OCR does not rely on runtime downloads.</li>
+<li>Move <code>multer</code> to the current major line used by the upload flow.</li>
+</ol>
+<h3><code>public/index.html</code></h3>
+<p>Changed to:</p>
+<ol>
+<li>Add top navigation links for the main app, whitepaper, and change log.</li>
+<li>Add a new OCR section with image upload, preview, extracted text area, status, and action buttons.</li>
+<li>Refresh the main page structure so OCR is a first-class workflow before manual problem entry.</li>
+<li>Keep the existing solver, word-problem, graphing, saved-items, and explanation modals available.</li>
+</ol>
+<h3><code>public/js/app.js</code></h3>
+<p>Changed to:</p>
+<ol>
+<li>Rebuild the main client controller for a shared state model across typed, word, and OCR solves.</li>
+<li>Add OCR upload, preview, status, metadata, extract-only, extract-and-solve, and import-to-input behaviors.</li>
+<li>Preserve manual solve, save, explain, verify, and graph AI workflows.</li>
+<li>Fix the app state so downstream features use the actual current problem instead of assuming every solve came from the math field.</li>
+</ol>
+<h3><code>public/js/animate.js</code></h3>
+<p>Changed to:</p>
+<ol>
+<li>Rebuild the animation controller with cleaner text handling.</li>
+<li>Make step-question and animation regeneration use the shared current problem state from the main app.</li>
+<li>Keep existing animation playback behavior and step chat support.</li>
+</ol>
+<h3><code>public/js/i18n.js</code></h3>
+<p>Changed to:</p>
+<ol>
+<li>Add the new OCR, hero, status, and error strings.</li>
+<li>Keep bilingual support for English and Vietnamese.</li>
+</ol>
+<h3><code>public/css/style.css</code></h3>
+<p>Changed to:</p>
+<ol>
+<li>Replace the old visual layer with a new layout and theme supporting the OCR surface and header navigation.</li>
+<li>Add styles for OCR preview, OCR metadata, hero cards, navigation pills, and updated responsive behavior.</li>
+<li>Keep the existing shared components such as tabs, step cards, graph sections, modals, and solution areas visually consistent.</li>
+</ol>
+<h2>Documentation Files</h2>
+<h3><code>README.md</code></h3>
+<p>Changed to:</p>
+<ol>
+<li>Replace the minimal setup note with a clearer project overview and startup instructions.</li>
+<li>Add pointers to the whitepaper and implementation change log routes.</li>
+</ol>
+<h3><code>WHITEPAPER.md</code></h3>
+<p>Added to:</p>
+<ol>
+<li>Provide a professional product and architecture whitepaper in Markdown.</li>
+<li>Document the OCR design, API surface, operations model, and roadmap.</li>
+<li>Include navigation links back to the main Mathnote app.</li>
+</ol>
+<h3><code>changed-readme.md</code></h3>
+<p>Added to:</p>
+<ol>
+<li>Explain the file-level changes made in this implementation.</li>
+<li>Provide a quick navigation link back to the main app and whitepaper.</li>
+</ol>
+<h2>Environment And Repo Hygiene</h2>
+<h3><code>.env.example</code></h3>
+<p>Changed to:</p>
+<ol>
+<li>Add <code>PORT</code>.</li>
+<li>Provide a cleaner placeholder for <code>GROQ_API</code>.</li>
+</ol>
+<h3><code>.gitignore</code></h3>
+<p>Changed to:</p>
+<ol>
+<li>Ignore <code>.env.txt</code> so extra local environment files are less likely to be committed by mistake.</li>
+</ol>
+<h2>Files Intentionally Left In Place</h2>
+<h3><code>public/js/graph.js</code></h3>
+<p>Kept and reused because:</p>
+<ol>
+<li>The existing graphing module already covered the current graph workflow and did not need architectural changes for OCR.</li>
+</ol>
+<h3><code>public/css/animate.css</code></h3>
+<p>Kept because:</p>
+<ol>
+<li>The overlay animation styling was already separated and still compatible with the revised animation controller.</li>
+</ol>
+<h3><code>.env.txt</code></h3>
+<p>Not modified because:</p>
+<ol>
+<li>It appears to be a local environment file rather than part of the intended project template.</li>
+</ol>

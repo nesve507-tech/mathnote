@@ -5,7 +5,7 @@ Mathnote is a small Express + static frontend application for step-by-step math 
 ## Setup
 
 1. Copy `.env.example` to `.env`.
-2. Set `GROQ_API` in `.env`.
+2. Set `GEMINI_API_KEY` in `.env`.
 3. Install dependencies with `npm install`.
 4. Start the app with `npm start`.
 

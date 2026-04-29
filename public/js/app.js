@@ -1,4 +1,4 @@
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
   let conversationHistory = [];
   let currentSolution = null;
   let currentProblemText = '';
@@ -9,6 +9,14 @@ document.addEventListener('DOMContentLoaded', () => {
   let currentOcrResult = null;
   let currentOcrFile = null;
   let currentOcrPreviewUrl = '';
+  let currentDocumentFile = null;
+  let currentDocumentStatusKey = 'documentStatusIdle';
+  let currentDocumentQuestions = [];
+  let currentUser = null;
+  const captchaState = {
+    login: null,
+    signup: null,
+  };
 
   const mathInput = document.getElementById('mathInput');
   const classLevelInput = document.getElementById('classLevel');
@@ -31,6 +39,16 @@ document.addEventListener('DOMContentLoaded', () => {
   const ocrStatus = document.getElementById('ocrStatus');
   const ocrMeta = document.getElementById('ocrMeta');
 
+  const documentInput = document.getElementById('documentInput');
+  const documentSelectBtn = document.getElementById('documentSelectBtn');
+  const documentExtractBtn = document.getElementById('documentExtractBtn');
+  const documentSolveBtn = document.getElementById('documentSolveBtn');
+  const documentClearBtn = document.getElementById('documentClearBtn');
+  const documentFileName = document.getElementById('documentFileName');
+  const documentStatus = document.getElementById('documentStatus');
+  const documentTextOutput = document.getElementById('documentTextOutput');
+  const documentQuestions = document.getElementById('documentQuestions');
+
   const sharedSolutionArea = document.getElementById('sharedSolutionArea');
   const loadingContainer = document.getElementById('loadingContainer');
   const solutionSection = document.getElementById('solutionSection');
@@ -41,16 +59,40 @@ document.addEventListener('DOMContentLoaded', () => {
   const verificationBadge = document.getElementById('verificationBadge');
   const verificationDetail = document.getElementById('verificationDetail');
   const saveBtn = document.getElementById('saveBtn');
+  const exportPdfBtn = document.getElementById('exportPdfBtn');
+  const exportWordBtn = document.getElementById('exportWordBtn');
 
   const keyboardToggle = document.getElementById('keyboardToggle');
   const mathKeyboard = document.getElementById('mathKeyboard');
   const langToggle = document.getElementById('langToggle');
   const themeToggle = document.getElementById('themeToggle');
+  const logoutBtn = document.getElementById('logoutBtn');
+  const historyBtn = document.getElementById('historyBtn');
+  const adminBtn = document.getElementById('adminBtn');
+  const passwordBtn = document.getElementById('passwordBtn');
+
+  const authGate = document.getElementById('authGate');
+  const authStatus = document.getElementById('authStatus');
+  const loginForm = document.getElementById('loginForm');
+  const signupForm = document.getElementById('signupForm');
+  const loginCaptchaQuestion = document.getElementById('loginCaptchaQuestion');
+  const signupCaptchaQuestion = document.getElementById('signupCaptchaQuestion');
+  const loginCaptchaAnswer = document.getElementById('loginCaptchaAnswer');
+  const signupCaptchaAnswer = document.getElementById('signupCaptchaAnswer');
 
   const savedProblemsBtn = document.getElementById('savedProblemsBtn');
   const savedModal = document.getElementById('savedModal');
   const closeSavedModal = document.getElementById('closeSavedModal');
   const savedList = document.getElementById('savedList');
+
+  const historyModal = document.getElementById('historyModal');
+  const closeHistoryModal = document.getElementById('closeHistoryModal');
+  const historyList = document.getElementById('historyList');
+
+  const passwordModal = document.getElementById('passwordModal');
+  const closePasswordModal = document.getElementById('closePasswordModal');
+  const passwordForm = document.getElementById('passwordForm');
+  const passwordStatus = document.getElementById('passwordStatus');
 
   const explainModal = document.getElementById('explainModal');
   const closeExplainModal = document.getElementById('closeExplainModal');
@@ -75,7 +117,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
   applyTranslations();
   initTheme();
+  setupAuthHandlers();
+  await initAuthGate();
   setOcrStatus('ocrStatusIdle');
+  setDocumentStatus('documentStatusIdle');
   updateOcrMeta(null);
 
   if (window.AnimationModule) {
@@ -98,6 +143,10 @@ document.addEventListener('DOMContentLoaded', () => {
   langToggle.addEventListener('click', () => {
     toggleLanguage();
     setOcrStatus(currentOcrStatusKey, ocrStatus.dataset.tone || 'info');
+    setDocumentStatus(currentDocumentStatusKey, documentStatus.dataset.tone || 'info');
+    if (!currentDocumentFile) {
+      documentFileName.textContent = t('documentNoFile');
+    }
     updateOcrMeta(currentOcrResult);
   });
 
@@ -110,6 +159,18 @@ document.addEventListener('DOMContentLoaded', () => {
       document.body.setAttribute('data-theme', 'light');
       localStorage.setItem('mathnote-theme', 'light');
     }
+  });
+
+  logoutBtn.addEventListener('click', async () => {
+    try {
+      await fetch('/mathnote/api/logout', { method: 'POST' });
+    } catch (error) {
+      console.warn('Logout request failed:', error);
+    }
+
+    currentUser = null;
+    showAuthGate();
+    showToast(t('loggedOut'), 'success');
   });
 
   keyboardToggle.addEventListener('click', () => {
@@ -187,6 +248,21 @@ document.addEventListener('DOMContentLoaded', () => {
 
   ocrClearBtn.addEventListener('click', clearOcrState);
 
+  documentSelectBtn.addEventListener('click', () => documentInput.click());
+
+  documentInput.addEventListener('change', () => {
+    const file = documentInput.files?.[0];
+    if (!file) {
+      return;
+    }
+
+    setDocumentFile(file);
+  });
+
+  documentSolveBtn.addEventListener('click', runDocumentSolve);
+  documentClearBtn.addEventListener('click', clearDocumentState);
+  documentExtractBtn.addEventListener('click', runDocumentExtract);
+
   verificationBadge.style.cursor = 'pointer';
   verificationBadge.addEventListener('click', () => {
     const isVisible = verificationDetail.style.display !== 'none';
@@ -197,39 +273,91 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
-  saveBtn.addEventListener('click', () => {
+  saveBtn.addEventListener('click', async () => {
     if (!currentSolution || !currentDisplayProblem) {
       return;
     }
 
-    const saved = JSON.parse(localStorage.getItem('mathnote-saved') || '[]');
-    saved.unshift({
-      id: Date.now(),
-      problem: currentDisplayProblem,
-      problemText: currentProblemText,
-      solution: currentSolution,
-      classLevel: currentClassLevel,
-      source: currentSource,
-      date: new Date().toLocaleString(),
-      lang: currentLang,
-    });
+    saveBtn.disabled = true;
+    try {
+      const response = await fetch('/mathnote/api/saved', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          problem: currentDisplayProblem,
+          problemText: currentProblemText,
+          solution: currentSolution,
+          classLevel: currentClassLevel,
+          source: currentSource,
+          lang: currentLang,
+        }),
+      });
 
-    localStorage.setItem('mathnote-saved', JSON.stringify(saved));
-    showToast(t('savedSuccess'), 'success');
+      const data = await response.json();
+      if (!response.ok) {
+        throw buildResponseError(response.status, data);
+      }
+
+      showToast(t('savedSuccess'), 'success');
+    } catch (error) {
+      console.error('Save error:', error);
+      showToast(resolveApiErrorMessage(error), 'error');
+    } finally {
+      saveBtn.disabled = false;
+    }
   });
 
-  savedProblemsBtn.addEventListener('click', () => {
-    renderSavedList();
+  exportPdfBtn.addEventListener('click', () => exportSolution('pdf'));
+  exportWordBtn.addEventListener('click', () => exportSolution('docx'));
+
+  savedProblemsBtn.addEventListener('click', async () => {
     savedModal.style.display = 'flex';
+    await renderSavedList();
+  });
+
+  historyBtn.addEventListener('click', async () => {
+    historyModal.style.display = 'flex';
+    await renderHistoryList();
+  });
+
+  passwordBtn.addEventListener('click', () => {
+    passwordForm.reset();
+    passwordStatus.textContent = '';
+    passwordModal.style.display = 'flex';
+  });
+
+  passwordForm.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    await changePassword();
   });
 
   closeSavedModal.addEventListener('click', () => {
     savedModal.style.display = 'none';
   });
 
+  closeHistoryModal.addEventListener('click', () => {
+    historyModal.style.display = 'none';
+  });
+
+  closePasswordModal.addEventListener('click', () => {
+    passwordModal.style.display = 'none';
+  });
+
   savedModal.addEventListener('click', (event) => {
     if (event.target === savedModal) {
       savedModal.style.display = 'none';
+    }
+  });
+
+  historyModal.addEventListener('click', (event) => {
+    if (event.target === historyModal) {
+      historyModal.style.display = 'none';
+    }
+  });
+
+  passwordModal.addEventListener('click', (event) => {
+    if (event.target === passwordModal) {
+      passwordModal.style.display = 'none';
     }
   });
 
@@ -383,6 +511,144 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
+  function setupAuthHandlers() {
+    document.querySelectorAll('.auth-tab').forEach((button) => {
+      button.addEventListener('click', () => switchAuthTab(button.getAttribute('data-auth-tab')));
+    });
+
+    document.querySelectorAll('.captcha-refresh').forEach((button) => {
+      button.addEventListener('click', () => loadCaptcha(button.getAttribute('data-captcha-target')));
+    });
+
+    loginForm.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      await submitAuthForm('login');
+    });
+
+    signupForm.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      await submitAuthForm('signup');
+    });
+  }
+
+  async function initAuthGate() {
+    try {
+      const response = await fetch('/mathnote/api/me');
+      const data = await response.json();
+      if (response.ok && data.authenticated) {
+        setAuthenticatedUser(data.user);
+        return;
+      }
+    } catch (error) {
+      console.warn('Auth check failed:', error);
+    }
+
+    showAuthGate();
+  }
+
+  function setAuthenticatedUser(user) {
+    currentUser = user;
+    authGate.style.display = 'none';
+    logoutBtn.style.display = 'inline-flex';
+    adminBtn.style.display = user?.role === 'admin' ? 'inline-flex' : 'none';
+    authStatus.textContent = '';
+    authStatus.removeAttribute('data-tone');
+  }
+
+  async function showAuthGate() {
+    authGate.style.display = 'grid';
+    logoutBtn.style.display = 'none';
+    adminBtn.style.display = 'none';
+    switchAuthTab('login');
+    await Promise.all([loadCaptcha('login'), loadCaptcha('signup')]);
+  }
+
+  function switchAuthTab(tabName) {
+    document.querySelectorAll('.auth-tab').forEach((button) => {
+      button.classList.toggle('active', button.getAttribute('data-auth-tab') === tabName);
+    });
+
+    loginForm.classList.toggle('active', tabName === 'login');
+    signupForm.classList.toggle('active', tabName === 'signup');
+    authStatus.textContent = '';
+    authStatus.removeAttribute('data-tone');
+  }
+
+  async function loadCaptcha(type) {
+    const target = type === 'signup' ? 'signup' : 'login';
+    const questionElement = target === 'signup' ? signupCaptchaQuestion : loginCaptchaQuestion;
+    const answerElement = target === 'signup' ? signupCaptchaAnswer : loginCaptchaAnswer;
+
+    questionElement.textContent = '...';
+    answerElement.value = '';
+
+    try {
+      const response = await fetch('/mathnote/api/captcha');
+      const data = await response.json();
+      if (!response.ok || !data.captcha) {
+        throw buildResponseError(response.status, data);
+      }
+
+      captchaState[target] = data.captcha;
+      questionElement.textContent = data.captcha.question;
+    } catch (error) {
+      console.error('Captcha error:', error);
+      captchaState[target] = null;
+      questionElement.textContent = t('captchaUnavailable');
+    }
+  }
+
+  async function submitAuthForm(type) {
+    const isSignup = type === 'signup';
+    const form = isSignup ? signupForm : loginForm;
+    const captcha = captchaState[type];
+    const formData = new FormData(form);
+    const submitButton = form.querySelector('.auth-submit');
+
+    if (!captcha) {
+      setAuthStatus(t('captchaUnavailable'), 'error');
+      await loadCaptcha(type);
+      return;
+    }
+
+    submitButton.disabled = true;
+    setAuthStatus(isSignup ? t('creatingAccount') : t('loggingIn'), 'success');
+
+    try {
+      const response = await fetch(`/mathnote/api/${isSignup ? 'signup' : 'login'}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: formData.get('name'),
+          email: formData.get('email'),
+          password: formData.get('password'),
+          captchaId: captcha.id,
+          captchaAnswer: formData.get('captchaAnswer'),
+        }),
+      });
+
+      const data = await response.json();
+      if (!response.ok) {
+        throw buildResponseError(response.status, data);
+      }
+
+      form.reset();
+      setAuthenticatedUser(data.user);
+      showToast(isSignup ? t('signupSuccess') : t('loginSuccess'), 'success');
+    } catch (error) {
+      console.error('Auth error:', error);
+      setAuthStatus(error.message || t('authFailed'), 'error');
+      await loadCaptcha(type);
+    } finally {
+      submitButton.disabled = false;
+    }
+  }
+
+  function setAuthStatus(message, tone) {
+    authStatus.textContent = message;
+    authStatus.dataset.tone = tone;
+  }
+
   function getActiveTab() {
     return document.querySelector('.tab.active')?.getAttribute('data-tab') || 'solver';
   }
@@ -465,6 +731,159 @@ document.addEventListener('DOMContentLoaded', () => {
     ocrPreviewImage.removeAttribute('src');
     ocrPreviewImage.style.display = 'none';
     ocrPreviewEmpty.style.display = 'block';
+  }
+
+  function setDocumentFile(file) {
+    currentDocumentFile = file;
+    currentDocumentQuestions = [];
+    documentTextOutput.value = '';
+    documentQuestions.innerHTML = '';
+    documentFileName.textContent = file.name;
+    setDocumentStatus('documentStatusSelected', 'info');
+  }
+
+  function clearDocumentState() {
+    currentDocumentFile = null;
+    currentDocumentQuestions = [];
+    documentInput.value = '';
+    documentTextOutput.value = '';
+    documentQuestions.innerHTML = '';
+    documentFileName.textContent = t('documentNoFile');
+    setDocumentStatus('documentStatusIdle', 'info');
+  }
+
+  function setDocumentStatus(key, tone = 'info') {
+    currentDocumentStatusKey = key;
+    documentStatus.dataset.tone = tone;
+    documentStatus.textContent = t(key);
+  }
+
+  async function runDocumentSolve() {
+    if (!currentDocumentFile) {
+      showToast(t('errorNoDocument'), 'error');
+      return;
+    }
+
+    setDocumentStatus('documentStatusRunning', 'info');
+    toggleDocumentButtons(true);
+    showLoading(true);
+    showSolution(false);
+
+    try {
+      const formData = new FormData();
+      formData.append('document', currentDocumentFile);
+      formData.append('lang', currentLang);
+      formData.append('classLevel', getActiveClassLevel());
+      formData.append('history', JSON.stringify(conversationHistory));
+
+      const response = await fetch('/mathnote/api/document-solve', {
+        method: 'POST',
+        body: formData,
+      });
+
+      const data = await response.json();
+      if (!response.ok) {
+        throw buildResponseError(response.status, data);
+      }
+
+      const extractedText = data.document?.text || '';
+      currentDocumentQuestions = Array.isArray(data.document?.questions) ? data.document.questions : [];
+      documentTextOutput.value = extractedText;
+      renderDocumentQuestions();
+
+      currentProblemText = extractedText;
+      currentDisplayProblem = data.document?.fileName || extractedText;
+      currentClassLevel = getActiveClassLevel();
+      currentSource = 'document';
+      currentSolution = data.solution;
+      conversationHistory = [
+        { role: 'user', content: `Solve document: ${extractedText}` },
+        { role: 'assistant', content: data.rawResponse },
+      ];
+
+      renderSolution(data.solution);
+      afterSolveSuccess(extractedText, data.solution);
+      setDocumentStatus('documentStatusSolved', 'success');
+    } catch (error) {
+      console.error('Document solve error:', error);
+      showLoading(false);
+      showSolution(false);
+      showToast(resolveApiErrorMessage(error), 'error');
+      setDocumentStatus('documentStatusError', 'error');
+    } finally {
+      toggleDocumentButtons(false);
+    }
+  }
+
+  async function runDocumentExtract() {
+    if (!currentDocumentFile) {
+      showToast(t('errorNoDocument'), 'error');
+      return;
+    }
+
+    setDocumentStatus('documentStatusExtracting', 'info');
+    toggleDocumentButtons(true);
+
+    try {
+      const formData = new FormData();
+      formData.append('document', currentDocumentFile);
+
+      const response = await fetch('/mathnote/api/document-extract', {
+        method: 'POST',
+        body: formData,
+      });
+
+      const data = await response.json();
+      if (!response.ok) {
+        throw buildResponseError(response.status, data);
+      }
+
+      documentTextOutput.value = data.document?.text || '';
+      currentDocumentQuestions = Array.isArray(data.document?.questions) ? data.document.questions : [];
+      renderDocumentQuestions();
+      setDocumentStatus('documentStatusExtracted', 'success');
+    } catch (error) {
+      console.error('Document extract error:', error);
+      showToast(resolveApiErrorMessage(error), 'error');
+      setDocumentStatus('documentStatusError', 'error');
+    } finally {
+      toggleDocumentButtons(false);
+    }
+  }
+
+  function renderDocumentQuestions() {
+    if (!currentDocumentQuestions.length) {
+      documentQuestions.innerHTML = '';
+      return;
+    }
+
+    documentQuestions.innerHTML = currentDocumentQuestions
+      .map(
+        (question, index) => `
+          <div class="document-question">
+            <div class="document-question-text"><strong>${t('question')} ${index + 1}</strong><br>${escapeHtml(question)}</div>
+            <button class="btn-secondary solve-document-question" type="button" data-index="${index}">${t('solve')}</button>
+          </div>
+        `
+      )
+      .join('');
+
+    documentQuestions.querySelectorAll('.solve-document-question').forEach((button) => {
+      button.addEventListener('click', async () => {
+        const question = currentDocumentQuestions[Number(button.getAttribute('data-index'))];
+        if (!question) {
+          return;
+        }
+
+        await solveGeneric(question, getActiveClassLevel(), question, 'document-question');
+      });
+    });
+  }
+
+  function toggleDocumentButtons(isBusy) {
+    [documentSelectBtn, documentExtractBtn, documentSolveBtn, documentClearBtn].forEach((button) => {
+      button.disabled = isBusy;
+    });
   }
 
   function setOcrStatus(key, tone = 'info') {
@@ -595,6 +1014,7 @@ document.addEventListener('DOMContentLoaded', () => {
           classLevel: level,
           lang: currentLang,
           history: conversationHistory,
+          source,
         }),
       });
 
@@ -616,6 +1036,50 @@ document.addEventListener('DOMContentLoaded', () => {
       showLoading(false);
       showSolution(false);
       showToast(resolveApiErrorMessage(error), 'error');
+    }
+  }
+
+  async function exportSolution(format) {
+    if (!currentSolution) {
+      showToast(t('errorNoSolution'), 'error');
+      return;
+    }
+
+    const isPdf = format === 'pdf';
+    const button = isPdf ? exportPdfBtn : exportWordBtn;
+    button.disabled = true;
+
+    try {
+      const response = await fetch('/mathnote/api/export', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          problem: currentProblemText || currentDisplayProblem,
+          solution: currentSolution,
+          format,
+        }),
+      });
+
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        throw buildResponseError(response.status, data);
+      }
+
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = isPdf ? 'mathnote-solution.pdf' : 'mathnote-solution.docx';
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+      showToast(isPdf ? t('exportPdfSuccess') : t('exportWordSuccess'), 'success');
+    } catch (error) {
+      console.error('Export error:', error);
+      showToast(resolveApiErrorMessage(error), 'error');
+    } finally {
+      button.disabled = false;
     }
   }
 
@@ -694,7 +1158,7 @@ document.addEventListener('DOMContentLoaded', () => {
       if (!verification.isCorrect && verification.correctedAnswer) {
         detailHtml += `
           <div class="verify-corrected">
-            <span class="verify-corrected-label">${currentLang === 'vi' ? 'Dap an dung' : 'Correct Answer'}:</span>
+            <span class="verify-corrected-label">${currentLang === 'vi' ? 'Đáp án đúng' : 'Correct Answer'}:</span>
             <span class="verify-corrected-math">\\(${verification.correctedAnswer}\\)</span>
           </div>
         `;
@@ -822,8 +1286,23 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  function renderSavedList() {
-    const saved = JSON.parse(localStorage.getItem('mathnote-saved') || '[]');
+  async function renderSavedList() {
+    savedList.innerHTML = loadingMarkup();
+
+    let saved = [];
+    try {
+      const response = await fetch('/mathnote/api/saved');
+      const data = await response.json();
+      if (!response.ok) {
+        throw buildResponseError(response.status, data);
+      }
+
+      saved = Array.isArray(data.saved) ? data.saved : [];
+    } catch (error) {
+      console.error('Load saved error:', error);
+      savedList.innerHTML = `<p class="empty-state" style="color: var(--error);">${resolveApiErrorMessage(error)}</p>`;
+      return;
+    }
 
     if (saved.length === 0) {
       savedList.innerHTML = `<p class="empty-state">${t('noSavedProblems')}</p>`;
@@ -832,7 +1311,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     savedList.innerHTML = saved
       .map((item) => {
-        const label = item.source === 'word' ? t('wordProblem') : 'Mathnote';
+        const label = item.source === 'word' ? t('wordProblem') : item.source === 'document' ? t('document') : 'Mathnote';
         return `
           <div class="saved-item" data-id="${item.id}">
             <div class="saved-item-problem">${sanitizeLatex(item.problem)}</div>
@@ -851,7 +1330,7 @@ document.addEventListener('DOMContentLoaded', () => {
     savedList.querySelectorAll('.load-saved-btn').forEach((button) => {
       button.addEventListener('click', (event) => {
         event.stopPropagation();
-        const id = Number(button.getAttribute('data-id'));
+        const id = button.getAttribute('data-id');
         const item = saved.find((entry) => entry.id === id);
         if (!item) {
           return;
@@ -861,6 +1340,11 @@ document.addEventListener('DOMContentLoaded', () => {
           switchTab('word');
           wordProblemInput.value = item.problem;
           wordClassLevelInput.value = item.classLevel || '';
+        } else if (item.source === 'document') {
+          switchTab('solver');
+          documentTextOutput.value = item.problemText || item.problem;
+          documentFileName.textContent = item.problem;
+          setDocumentStatus('documentStatusSolved', 'success');
         } else {
           switchTab('solver');
           setMathInputValue(item.problem);
@@ -879,15 +1363,173 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     savedList.querySelectorAll('.delete-saved-btn').forEach((button) => {
-      button.addEventListener('click', (event) => {
+      button.addEventListener('click', async (event) => {
         event.stopPropagation();
-        const id = Number(button.getAttribute('data-id'));
-        const nextSaved = saved.filter((entry) => entry.id !== id);
-        localStorage.setItem('mathnote-saved', JSON.stringify(nextSaved));
-        renderSavedList();
-        showToast(t('deletedSuccess'), 'success');
+        const id = button.getAttribute('data-id');
+        button.disabled = true;
+
+        try {
+          const response = await fetch(`/mathnote/api/saved/${encodeURIComponent(id)}`, {
+            method: 'DELETE',
+          });
+          const data = await response.json();
+          if (!response.ok) {
+            throw buildResponseError(response.status, data);
+          }
+
+          await renderSavedList();
+          showToast(t('deletedSuccess'), 'success');
+        } catch (error) {
+          console.error('Delete saved error:', error);
+          showToast(resolveApiErrorMessage(error), 'error');
+          button.disabled = false;
+        }
       });
     });
+  }
+
+  async function renderHistoryList() {
+    historyList.innerHTML = loadingMarkup();
+
+    let history = [];
+    try {
+      const response = await fetch('/mathnote/api/history');
+      const data = await response.json();
+      if (!response.ok) {
+        throw buildResponseError(response.status, data);
+      }
+
+      history = Array.isArray(data.history) ? data.history : [];
+    } catch (error) {
+      console.error('Load history error:', error);
+      historyList.innerHTML = `<p class="empty-state" style="color: var(--error);">${resolveApiErrorMessage(error)}</p>`;
+      return;
+    }
+
+    if (history.length === 0) {
+      historyList.innerHTML = `<p class="empty-state">${t('noHistory')}</p>`;
+      return;
+    }
+
+    historyList.innerHTML = history
+      .map((item) => {
+        const label =
+          item.source === 'word'
+            ? t('wordProblem')
+            : item.source === 'document' || item.source === 'document-question'
+              ? t('document')
+              : item.source === 'graph'
+                ? t('graphing')
+                : item.source === 'ocr'
+                  ? 'OCR'
+                  : 'Mathnote';
+        return `
+          <div class="saved-item" data-id="${item.id}">
+            <div class="saved-item-problem">${sanitizeLatex(item.problem)}</div>
+            <div class="saved-item-date">${escapeHtml(item.date)} · ${escapeHtml(item.classLevel || 'General')} · ${escapeHtml(label)}</div>
+            <div class="saved-item-actions">
+              <button class="btn-secondary load-history-btn" type="button" data-id="${item.id}">${t('load')}</button>
+              <button class="btn-secondary delete-history-btn" type="button" data-id="${item.id}" style="color: var(--error);">${t('delete')}</button>
+            </div>
+          </div>
+        `;
+      })
+      .join('');
+
+    historyList.querySelectorAll('.saved-item-problem').forEach((element) => renderMath(element));
+
+    historyList.querySelectorAll('.load-history-btn').forEach((button) => {
+      button.addEventListener('click', (event) => {
+        event.stopPropagation();
+        const id = button.getAttribute('data-id');
+        const item = history.find((entry) => entry.id === id);
+        if (!item) {
+          return;
+        }
+
+        loadSolvedItem(item);
+        historyModal.style.display = 'none';
+      });
+    });
+
+    historyList.querySelectorAll('.delete-history-btn').forEach((button) => {
+      button.addEventListener('click', async (event) => {
+        event.stopPropagation();
+        const id = button.getAttribute('data-id');
+        button.disabled = true;
+
+        try {
+          const response = await fetch(`/mathnote/api/history/${encodeURIComponent(id)}`, {
+            method: 'DELETE',
+          });
+          const data = await response.json();
+          if (!response.ok) {
+            throw buildResponseError(response.status, data);
+          }
+
+          await renderHistoryList();
+          showToast(t('deletedSuccess'), 'success');
+        } catch (error) {
+          console.error('Delete history error:', error);
+          showToast(resolveApiErrorMessage(error), 'error');
+          button.disabled = false;
+        }
+      });
+    });
+  }
+
+  function loadSolvedItem(item) {
+    if (item.source === 'word') {
+      switchTab('word');
+      wordProblemInput.value = item.problemText || item.problem;
+      wordClassLevelInput.value = item.classLevel || '';
+    } else {
+      switchTab('solver');
+      setMathInputValue(item.problemText || item.problem);
+      classLevelInput.value = item.classLevel || '';
+    }
+
+    currentProblemText = item.problemText || item.problem;
+    currentDisplayProblem = item.problem;
+    currentClassLevel = item.classLevel || '';
+    currentSource = item.source || 'solver';
+    currentSolution = item.solution;
+    renderSolution(item.solution);
+    showSolution(true);
+  }
+
+  async function changePassword() {
+    const formData = new FormData(passwordForm);
+    const submitButton = passwordForm.querySelector('.auth-submit');
+    submitButton.disabled = true;
+    passwordStatus.textContent = t('changingPassword');
+    passwordStatus.dataset.tone = 'success';
+
+    try {
+      const response = await fetch('/mathnote/api/account/password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          currentPassword: formData.get('currentPassword'),
+          newPassword: formData.get('newPassword'),
+        }),
+      });
+
+      const data = await response.json();
+      if (!response.ok) {
+        throw buildResponseError(response.status, data);
+      }
+
+      passwordForm.reset();
+      passwordStatus.textContent = t('passwordChanged');
+      showToast(t('passwordChanged'), 'success');
+    } catch (error) {
+      console.error('Change password error:', error);
+      passwordStatus.dataset.tone = 'error';
+      passwordStatus.textContent = resolveApiErrorMessage(error);
+    } finally {
+      submitButton.disabled = false;
+    }
   }
 
   function renderGraphAnalysis(result) {
@@ -1217,6 +1859,11 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function resolveApiErrorMessage(error) {
+    if (error?.status === 401) {
+      showAuthGate();
+      return t('authRequired');
+    }
+
     if (error?.status === 429 || error?.retryAfter) {
       return t('rateLimit').replace('{secs}', error.retryAfter || 30);
     }

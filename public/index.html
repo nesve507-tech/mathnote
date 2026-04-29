@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en" data-lang="en">
   <head>
     <meta charset="UTF-8" />
@@ -50,6 +50,15 @@
           </svg>
           <span data-i18n="saved">Saved</span>
         </button>
+        <button class="btn-icon" id="historyBtn" type="button" title="History">
+          <span data-i18n="history">History</span>
+        </button>
+        <a class="btn-icon" id="adminBtn" href="/mathnote/admin" title="Admin" style="display: none;">
+          <span>Admin</span>
+        </a>
+        <button class="btn-icon" id="passwordBtn" type="button" title="Change Password">
+          <span data-i18n="changePassword">Password</span>
+        </button>
         <button class="btn-icon" id="langToggle" title="Toggle Language">
           <span id="langLabel">EN</span>
         </button>
@@ -61,8 +70,114 @@
             />
           </svg>
         </button>
+        <button class="btn-icon" id="logoutBtn" type="button" title="Log out" style="display: none;">
+          <span data-i18n="logout">Logout</span>
+        </button>
       </div>
     </header>
+
+    <div class="auth-gate" id="authGate">
+      <section class="auth-panel glass-card" aria-labelledby="authTitle">
+        <div class="auth-copy">
+          <p class="section-eyebrow" data-i18n="authEyebrow">Account required</p>
+          <h1 id="authTitle" data-i18n="authTitle">Sign in to use Mathnote</h1>
+          <p data-i18n="authBody">
+            Create an account or log in before using the solver, OCR, saved notes, and graph analysis tools.
+          </p>
+        </div>
+
+        <div class="auth-tabs" role="tablist" aria-label="Authentication">
+          <button class="auth-tab active" id="loginTabBtn" type="button" data-auth-tab="login" data-i18n="login">
+            Login
+          </button>
+          <button class="auth-tab" id="signupTabBtn" type="button" data-auth-tab="signup" data-i18n="signup">
+            Sign up
+          </button>
+        </div>
+
+        <form class="auth-form active" id="loginForm">
+          <label for="loginEmail" data-i18n="email">Email</label>
+          <input class="input-text" id="loginEmail" name="email" type="email" autocomplete="email" required />
+
+          <label for="loginPassword" data-i18n="password">Password</label>
+          <input
+            class="input-text"
+            id="loginPassword"
+            name="password"
+            type="password"
+            autocomplete="current-password"
+            required
+          />
+
+          <div class="captcha-row">
+            <div>
+              <span class="captcha-label" data-i18n="captcha">Captcha</span>
+              <strong id="loginCaptchaQuestion">...</strong>
+            </div>
+            <button class="btn-secondary captcha-refresh" type="button" data-captcha-target="login" title="Refresh captcha">
+              R
+            </button>
+          </div>
+          <input
+            class="input-text"
+            id="loginCaptchaAnswer"
+            name="captchaAnswer"
+            type="text"
+            inputmode="numeric"
+            autocomplete="off"
+            data-i18n-placeholder="captchaPlaceholder"
+            placeholder="Answer"
+            required
+          />
+
+          <button class="btn-primary auth-submit" type="submit" data-i18n="login">Login</button>
+        </form>
+
+        <form class="auth-form" id="signupForm">
+          <label for="signupName" data-i18n="name">Name</label>
+          <input class="input-text" id="signupName" name="name" type="text" autocomplete="name" />
+
+          <label for="signupEmail" data-i18n="email">Email</label>
+          <input class="input-text" id="signupEmail" name="email" type="email" autocomplete="email" required />
+
+          <label for="signupPassword" data-i18n="password">Password</label>
+          <input
+            class="input-text"
+            id="signupPassword"
+            name="password"
+            type="password"
+            autocomplete="new-password"
+            minlength="8"
+            required
+          />
+
+          <div class="captcha-row">
+            <div>
+              <span class="captcha-label" data-i18n="captcha">Captcha</span>
+              <strong id="signupCaptchaQuestion">...</strong>
+            </div>
+            <button class="btn-secondary captcha-refresh" type="button" data-captcha-target="signup" title="Refresh captcha">
+              R
+            </button>
+          </div>
+          <input
+            class="input-text"
+            id="signupCaptchaAnswer"
+            name="captchaAnswer"
+            type="text"
+            inputmode="numeric"
+            autocomplete="off"
+            data-i18n-placeholder="captchaPlaceholder"
+            placeholder="Answer"
+            required
+          />
+
+          <button class="btn-primary auth-submit" type="submit" data-i18n="signup">Sign up</button>
+        </form>
+
+        <p class="auth-status" id="authStatus"></p>
+      </section>
+    </div>
 
     <main class="main">
       <section class="hero glass-card">
@@ -175,6 +290,49 @@
               ></textarea>
             </div>
           </div>
+        </section>
+
+        <section class="document-section glass-card">
+          <div class="section-heading">
+            <div>
+              <p class="section-eyebrow">PDF / Word</p>
+              <h2 data-i18n="documentTitle">Solve homework from a document</h2>
+            </div>
+            <span class="ocr-badge" data-i18n="documentBadge">PDF and Word DOCX</span>
+          </div>
+
+          <p class="section-copy" data-i18n="documentDescription">
+            Upload a PDF or Word file. Mathnote extracts the text and returns a detailed step-by-step solution.
+          </p>
+
+          <input type="file" id="documentInput" accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document" hidden />
+
+          <div class="ocr-toolbar">
+            <button class="btn-secondary" id="documentSelectBtn" type="button" data-i18n="documentSelect">
+              Select File
+            </button>
+            <button class="btn-secondary" id="documentExtractBtn" type="button" data-i18n="documentExtract">
+              Extract Questions
+            </button>
+            <button class="btn-primary" id="documentSolveBtn" type="button" data-i18n="documentSolve">
+              Solve Document
+            </button>
+            <button class="btn-secondary" id="documentClearBtn" type="button" data-i18n="clear">
+              Clear
+            </button>
+          </div>
+
+          <div class="document-file" id="documentFileName" data-i18n="documentNoFile">No document selected yet</div>
+          <div class="ocr-status" id="documentStatus" data-i18n="documentStatusIdle">Select a PDF or Word document.</div>
+          <div class="document-questions" id="documentQuestions"></div>
+          <textarea
+            id="documentTextOutput"
+            class="input-text textarea-input document-text-output"
+            rows="8"
+            placeholder="Extracted document text will appear here..."
+            data-i18n-placeholder="documentPlaceholder"
+            readonly
+          ></textarea>
         </section>
 
         <section class="input-section glass-card">
@@ -332,6 +490,12 @@
                 </svg>
                 <span data-i18n="save">Save</span>
               </button>
+              <button class="btn-secondary" id="exportPdfBtn" type="button" data-i18n="exportPdf">
+                Export PDF
+              </button>
+              <button class="btn-secondary" id="exportWordBtn" type="button" data-i18n="exportWord">
+                Export Word
+              </button>
             </div>
           </div>
 
@@ -440,6 +604,35 @@
       </div>
     </div>
 
+    <div class="modal-overlay" id="historyModal" style="display: none;">
+      <div class="modal glass-card">
+        <div class="modal-header">
+          <h2 data-i18n="history">History</h2>
+          <button class="btn-icon modal-close" id="closeHistoryModal" type="button">x</button>
+        </div>
+        <div class="modal-body" id="historyList">
+          <p class="empty-state" data-i18n="noHistory">No solved problems yet</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="modal-overlay" id="passwordModal" style="display: none;">
+      <div class="modal glass-card">
+        <div class="modal-header">
+          <h2 data-i18n="changePassword">Change Password</h2>
+          <button class="btn-icon modal-close" id="closePasswordModal" type="button">x</button>
+        </div>
+        <form class="auth-form active" id="passwordForm">
+          <label for="currentPassword" data-i18n="currentPassword">Current password</label>
+          <input class="input-text" id="currentPassword" name="currentPassword" type="password" required />
+          <label for="newPassword" data-i18n="newPassword">New password</label>
+          <input class="input-text" id="newPassword" name="newPassword" type="password" minlength="8" required />
+          <button class="btn-primary auth-submit" type="submit" data-i18n="changePassword">Change Password</button>
+          <p class="auth-status" id="passwordStatus"></p>
+        </form>
+      </div>
+    </div>
+
     <div class="modal-overlay" id="explainModal" style="display: none;">
       <div class="modal glass-card">
         <div class="modal-header">
@@ -460,3 +653,4 @@
     <script src="/mathnote/js/app.js"></script>
   </body>
 </html>
+
