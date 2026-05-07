@@ -5,6 +5,8 @@ const { MongoClient } = require('mongodb');
 
 const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017/mathnote';
 const MONGODB_DB = process.env.MONGODB_DB || 'mathnote';
+const MONGODB_TLS_ALLOW_INVALID_CERTIFICATES =
+  String(process.env.MONGODB_TLS_ALLOW_INVALID_CERTIFICATES || '').toLowerCase() === 'true';
 const PASSWORD_ITERATIONS = 120000;
 const PASSWORD_KEY_LENGTH = 64;
 const PASSWORD_DIGEST = 'sha512';
@@ -21,7 +23,10 @@ async function main() {
   const password = process.env.ADMIN_PASSWORD || process.argv[3] || 'Admin@123456';
   const name = process.env.ADMIN_NAME || 'Admin';
 
-  const client = new MongoClient(MONGODB_URI, { serverSelectionTimeoutMS: 5000 });
+  const client = new MongoClient(MONGODB_URI, {
+    serverSelectionTimeoutMS: 5000,
+    ...(MONGODB_TLS_ALLOW_INVALID_CERTIFICATES ? { tlsAllowInvalidCertificates: true } : {}),
+  });
   await client.connect();
 
   const users = client.db(MONGODB_DB).collection('users');

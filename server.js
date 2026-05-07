@@ -45,6 +45,8 @@ const PASSWORD_KEY_LENGTH = 64;
 const PASSWORD_DIGEST = 'sha512';
 const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017/mathnote';
 const MONGODB_DB = process.env.MONGODB_DB || 'mathnote';
+const MONGODB_TLS_ALLOW_INVALID_CERTIFICATES =
+  String(process.env.MONGODB_TLS_ALLOW_INVALID_CERTIFICATES || '').toLowerCase() === 'true';
 
 const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-1.5-flash';
 const GEMINI_API_BASE_URL = 'https://generativelanguage.googleapis.com/v1beta';
@@ -116,12 +118,47 @@ async function getUsersCollection() {
     return usersCollection;
   }
 
-  mongoClient = new MongoClient(MONGODB_URI, { serverSelectionTimeoutMS: 5000 });
-  await mongoClient.connect();
-  const db = mongoClient.db(MONGODB_DB);
-  usersCollection = db.collection('users');
-  await usersCollection.createIndex({ email: 1 }, { unique: true });
-  return usersCollection;
+  try {
+    mongoClient = new MongoClient(MONGODB_URI, getMongoClientOptions());
+    await mongoClient.connect();
+    const db = mongoClient.db(MONGODB_DB);
+    usersCollection = db.collection('users');
+    await usersCollection.createIndex({ email: 1 }, { unique: true });
+    return usersCollection;
+  } catch (error) {
+    mongoClient = null;
+    throw normalizeDatabaseError(error);
+  }
+}
+
+function getMongoClientOptions() {
+  const options = { serverSelectionTimeoutMS: 5000 };
+
+  if (MONGODB_TLS_ALLOW_INVALID_CERTIFICATES) {
+    options.tlsAllowInvalidCertificates = true;
+  }
+
+  return options;
+}
+
+function normalizeDatabaseError(error) {
+  const message = String(error?.message || '');
+  const isTlsError = /ssl|tls|certificate|openssl|alert/i.test(message);
+  const isConnectionError =
+    isTlsError || /ECONNREFUSED|ENOTFOUND|ETIMEDOUT|server selection|querySrv|authentication/i.test(message);
+
+  if (!isConnectionError) {
+    return error;
+  }
+
+  const normalized = new Error(
+    isTlsError
+      ? 'Database TLS connection failed. Check MONGODB_URI, Atlas network access, and TLS settings.'
+      : 'Database connection failed. Check MONGODB_URI and MongoDB network access.'
+  );
+  normalized.statusCode = 503;
+  normalized.cause = error;
+  return normalized;
 }
 
 async function getSavedProblemsCollection() {

@@ -38,6 +38,7 @@ GEMINI_API_KEY=your_gemini_api_key_here
 GEMINI_MODEL=gemini-1.5-flash
 MONGODB_URI=your_mongodb_connection_string
 MONGODB_DB=mathnote
+MONGODB_TLS_ALLOW_INVALID_CERTIFICATES=false
 AUTH_SECRET=replace_with_a_long_random_secret
 ADMIN_EMAIL=admin@mathnote.local
 ADMIN_PASSWORD=Admin@123456
@@ -70,6 +71,11 @@ Also make sure Atlas allows your IP:
 `Security > Database & Network Access > Network Access`
 
 For quick testing only, you can allow `0.0.0.0/0`.
+
+If signup/login shows a database TLS error, first verify that `MONGODB_URI` is the exact Drivers
+connection string from Atlas and does not force `tls=false`. For a local development database with a
+self-signed certificate only, set `MONGODB_TLS_ALLOW_INVALID_CERTIFICATES=true`; do not use that in
+production.
 
 ## Install
 
